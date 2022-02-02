@@ -12,15 +12,17 @@ export interface Cell {
 
   explored: boolean;
   path: boolean;
+  prev?: Cell;
 }
 
 export default class Maze extends GameMap {
   readonly width: number;
   readonly height: number;
 
-  private cells: Cell[][] = [];
+  cells: Cell[][] = [];
+  path: Cell[] = [];
 
-  constructor(width = 20, height = 20) {
+  constructor(width = 10, height = 10) {
     super("Maze", "Dev");
 
     this.width = width;
@@ -28,6 +30,7 @@ export default class Maze extends GameMap {
 
     this.createCells();
     this.generateMaze();
+    this.solveMaze();
   }
 
   private createCells() {
@@ -49,6 +52,8 @@ export default class Maze extends GameMap {
           path: false,
         });
       }
+
+      this.cells.push(row);
     }
   }
 
@@ -68,6 +73,9 @@ export default class Maze extends GameMap {
       const i = Math.floor(Math.random() * visitable.length);
 
       const chosen = visitable[i];
+      if (!chosen) continue;
+
+      chosen.visited = true;
 
       // left
       if (chosen.x + 1 === c.x) {
@@ -98,7 +106,82 @@ export default class Maze extends GameMap {
     }
   }
 
-  getNeighbours(c: Cell): Cell[] {
+  private solveMaze() {
+    const cells = this.cells;
+    const queue: Cell[] = [];
+
+    const entry = cells[0][0];
+    const exit = cells[this.height - 1][this.width - 1];
+
+    queue.push(entry);
+
+    // set all cells to not explored
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        cells[y][x].explored = false;
+      }
+    }
+
+    while (queue.length > 0) {
+      const c = <Cell>queue.shift();
+
+      if (c === exit) {
+        break;
+      } else if (c.explored) {
+        continue;
+      }
+
+      // add neighbours to queue
+      if (!c.t) {
+        const n = cells[c.y - 1][c.x];
+
+        if (!n.explored) {
+          n.prev = c;
+          queue.push(n);
+        }
+      }
+
+      if (!c.b) {
+        const n = cells[c.y + 1][c.x];
+        if (!n.explored) {
+          n.prev = c;
+          queue.push(n);
+        }
+      }
+
+      if (!c.l) {
+        const n = cells[c.y][c.x - 1];
+        if (!n.explored) {
+          n.prev = c;
+          queue.push(n);
+        }
+      }
+
+      if (!c.r) {
+        const n = cells[c.y][c.x + 1];
+        if (!n.explored) {
+          n.prev = c;
+          queue.push(n);
+        }
+      }
+
+      c.explored = true;
+    }
+
+    const path: Cell[] = [];
+    let curr = exit;
+
+    while (curr) {
+      curr.path = true;
+      path.unshift(curr);
+
+      curr = <Cell>curr.prev;
+    }
+
+    this.path = path;
+  }
+
+  private getNeighbours(c: Cell): Cell[] {
     const cells = this.cells;
     const neighbours: Cell[] = [];
 
