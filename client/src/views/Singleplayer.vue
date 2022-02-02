@@ -1,5 +1,5 @@
 <template>
-  <main class="bg-bg absolute top-0 left-0"></main>
+  <main class="bg-transparent absolute top-0 left-0 pointer-events-none"></main>
 </template>
 
 <script lang="ts">

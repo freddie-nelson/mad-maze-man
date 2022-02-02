@@ -41,6 +41,8 @@ export default class MapEditor {
     Blaze.setScene(this.scene);
     Game.setupScene();
 
+    const BALL_RADIUS = 1;
+
     const spawnMarkerRect = new Rect(BALL_RADIUS * 2, BALL_RADIUS * 2, vec2.create());
     spawnMarkerRect.texture = TEXTURES["spawnMarker"];
     this.spawnMarker = new Entity(vec2.create(), new CircleCollider(BALL_RADIUS), [spawnMarkerRect], 0);

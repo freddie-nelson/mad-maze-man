@@ -14,19 +14,38 @@ import Game from "./game";
 import World from "blaze-2d/lib/src/world";
 import KeyboardHandler, { KeyCallback } from "blaze-2d/lib/src/input/keyboard";
 import { TouchCallback } from "blaze-2d/lib/src/input/touch";
+import Object2D from "blaze-2d/lib/src/object2d";
+import Manifold from "blaze-2d/lib/src/physics/manifold";
+import CollisionObject from "blaze-2d/lib/src/physics/collisionObject";
+import Powerup from "./powerup";
+import Bullet from "./bullet";
 
 export default class Player {
   entity: Entity;
-  moveForce = 100;
-  maxVelocity = 30;
+  moveForce = 200;
+  maxVelocity = 5;
 
-  dashForce = 700;
-  dashTimeout = 800;
+  speedForce = 300;
+  speedMaxVel = 7;
+  speedInterval: number | undefined;
+
+  dashForce = 5000;
+  dashTimeout = 600;
   dashLastUsed = 0;
-  dashSensitivity = 200;
+  dashSensitivity = 300;
   dashTriedKey = "";
 
-  private size = 1;
+  minHealth = 0;
+  maxHealth = 100;
+  health = this.maxHealth;
+
+  isShooting = false;
+  timeOfShot = 0;
+  shotDelay = 50;
+  bulletSpeed = 10;
+  bulletLife = 2;
+
+  private size = 0.5;
   private mass = 5;
 
   private world = Blaze.getScene().world;
@@ -34,26 +53,63 @@ export default class Player {
 
   constructor() {
     const sprite = new Rect(this.size, this.size);
-    sprite.texture = TEXTURES.playerTex;
+    sprite.texture = TEXTURES.player;
 
     this.entity = new Entity(vec2.create(), new RectCollider(this.size, this.size), [sprite], this.mass);
     this.entity.setZIndex(1);
     this.entity.setInertia(0);
-    this.entity.airFriction = 20;
     this.entity.addEventListener("update", this.entityListener);
+    this.entity.addEventListener("fixedUpdate", this.physicsListener);
+    this.entity.addEventListener("trigger", this.powerupListener);
 
-    CANVAS.mouse.addListener(Mouse.LEFT, this.mouseListener);
-    CANVAS.touch.addListener("tap", this.touchListener);
+    this.entity.filter.group = PLAYER_GROUP;
 
+    this.world.addEntity(this.entity);
+    this.physics.addBody(this.entity);
+
+    CANVAS.keys.addListener(Game.controls.dashUp, this.dashListener);
+    CANVAS.keys.addListener(Game.controls.dashDown, this.dashListener);
     CANVAS.keys.addListener(Game.controls.dashLeft, this.dashListener);
     CANVAS.keys.addListener(Game.controls.dashRight, this.dashListener);
   }
+
+  private physicsListener = (delta: number) => {
+    vec2.scale(this.entity.velocity, this.entity.velocity, 0.9);
+  };
+
+  private powerupListener = (a: Entity, b: Entity, manifold: Manifold) => {
+    if (!(a instanceof Powerup || b instanceof Powerup)) return;
+
+    const powerup = a instanceof Powerup ? a : b;
+
+    if (powerup.name === "health") {
+      this.health = Math.min(this.maxHealth, this.health + this.maxHealth / 5);
+    } else if (powerup.name === "speed") {
+      const max = this.maxVelocity;
+      const force = this.moveForce;
+
+      this.maxVelocity = this.speedMaxVel;
+      this.moveForce = this.speedForce;
+
+      if (this.speedInterval !== undefined) clearInterval(this.speedInterval);
+
+      this.speedInterval = setInterval(() => {
+        this.maxVelocity = max;
+        this.moveForce = force;
+        this.speedInterval = undefined;
+      }, 10000);
+    }
+
+    this.world.removeEntity(powerup);
+    this.physics.removeBody(powerup);
+  };
 
   private entityListener = (delta: number) => {
     this.world.getCamera().setPosition(this.entity.getPosition());
 
     this.movement();
     this.capVelocity();
+    this.shoot(delta);
   };
 
   private movement() {
@@ -85,6 +141,29 @@ export default class Player {
       vec2.normalize(this.entity.velocity, this.entity.velocity);
       vec2.scale(this.entity.velocity, this.entity.velocity, this.maxVelocity);
     }
+  }
+
+  private shoot(delta: number) {
+    if (!CANVAS.mouse.isPressed(Mouse.LEFT)) return;
+
+    const now = performance.now();
+    if (now - this.timeOfShot < this.shotDelay) return;
+
+    this.timeOfShot = now;
+
+    const pos = CANVAS.mouse.getMousePos();
+    const world = this.world.getWorldFromPixel(pos);
+
+    const dir = vec2.sub(vec2.create(), world, this.entity.getPosition());
+    vec2.normalize(dir, dir);
+
+    new Bullet(
+      this.world,
+      this.physics,
+      vec2.add(vec2.create(), this.entity.getPosition(), vec2.scale(vec2.create(), dir, 0.5)),
+      vec2.scale(vec2.create(), dir, this.bulletSpeed),
+      this.bulletLife
+    );
   }
 
   private lastDashPressed = false;
@@ -130,20 +209,4 @@ export default class Player {
 
     this.dashLastUsed = performance.now();
   }
-
-  private mouseListener = (pressed: boolean, pos: vec2) => {
-    if (pressed) {
-      console.log("shoot");
-    } else {
-      console.log("no shoot");
-    }
-  };
-
-  private touchListener: TouchCallback = (touch, e) => {
-    touch.addListener("release", (touch) => {
-      this.mouseListener(false, touch.pos);
-    });
-
-    this.mouseListener(true, touch.pos);
-  };
 }

@@ -12,6 +12,7 @@ import GameMap from "./map";
 import Tile, { TileMaterial } from "./tile";
 import LineCollider from "blaze-2d/lib/src/physics/collider/line";
 import RigidBody from "blaze-2d/lib/src/physics/rigidbody";
+import Maze from "./maze";
 
 // setup globals
 declare global {
@@ -22,9 +23,6 @@ declare global {
   var SMALL_TEXS: boolean;
   var CELL_SCALE: number;
 
-  var BALL_RADIUS: number;
-  var BALL_MASS: number;
-
   var TILE_TYPES: string[];
   var TILE_IMAGES: string[];
   var TILE_MATERIALS: { [index: string]: TileMaterial };
@@ -34,6 +32,9 @@ declare global {
   var TILE_SLOP: number;
   var TILE_MASS: number;
   var TILE_ROTATION_INC: number;
+
+  var PLAYER_GROUP: number;
+  var ENEMY_GROUP: number;
 }
 
 export default abstract class Game {
@@ -62,10 +63,11 @@ export default abstract class Game {
     globalThis.ATLAS = new TextureAtlas(4096);
     globalThis.TEXTURES = {};
 
-    globalThis.CELL_SCALE = 3;
+    globalThis.CELL_SCALE = 5;
+    // globalThis.CELL_SCALE = 0.5;
 
-    globalThis.TILE_TYPES = ["wall", "stone"];
-    globalThis.TILE_IMAGES = ["wall", "stone"];
+    globalThis.TILE_TYPES = ["wall", "stone", "arrow"];
+    globalThis.TILE_IMAGES = ["wall", "stone", "arrow"];
 
     globalThis.TILE_MATERIALS = {
       wall: {
@@ -80,12 +82,16 @@ export default abstract class Game {
     globalThis.TILE_TYPE_MATERIALS = {
       wall: "wall",
       stone: "floor",
+      arrow: "floor",
     };
 
     globalThis.TILE_SIZE = 1;
     globalThis.TILE_SLOP = 0.01;
     globalThis.TILE_MASS = 0;
     globalThis.TILE_ROTATION_INC = -Math.PI / 4;
+
+    globalThis.PLAYER_GROUP = 10;
+    globalThis.ENEMY_GROUP = 20;
 
     this.canvas = Blaze.getCanvas();
 
@@ -97,22 +103,37 @@ export default abstract class Game {
 
     // load textures
     (async () => {
-      const tileTexs = [new Texture(new Color("#929292")), new Texture(new Color("#929292"))];
+      const tileTexs = [
+        new Texture(new Color("#929292")),
+        new Texture(new Color("#929292")),
+        new Texture(new Color("#929292")),
+      ];
 
       TEXTURES.player = new Texture(new Color("#0000FF"));
       TEXTURES.enemy = new Texture(new Color("#FF0000"));
       TEXTURES.bullet = new Texture(new Color("#0000FF"));
+      TEXTURES.speed = new Texture(new Color("#0000FF"));
+      TEXTURES.health = new Texture(new Color("#FF0000"));
 
       for (let i = 0; i < TILE_TYPES.length; i++) {
         TEXTURES[TILE_TYPES[i]] = tileTexs[i];
       }
 
-      await ATLAS.addTextures(TEXTURES.player, TEXTURES.enemy, TEXTURES.bullet, ...tileTexs);
+      await ATLAS.addTextures(
+        TEXTURES.player,
+        TEXTURES.enemy,
+        TEXTURES.bullet,
+        TEXTURES.speed,
+        TEXTURES.health,
+        ...tileTexs
+      );
 
       await Promise.all([
         TEXTURES.player.loadImage("/assets/sprites/player.png"),
         TEXTURES.enemy.loadImage("/assets/sprites/enemy.png"),
         TEXTURES.bullet.loadImage("/assets/sprites/bullet.png"),
+        TEXTURES.speed.loadImage("/assets/sprites/speed.png"),
+        TEXTURES.health.loadImage("/assets/sprites/health.png"),
         ...tileTexs.map((tex, i) => tex.loadImage(`/assets/tiles/${TILE_IMAGES[i]}.png`)),
       ]);
 
@@ -124,9 +145,11 @@ export default abstract class Game {
     const world = Blaze.getScene().world;
     const physics = Blaze.getScene().physics;
 
+    // physics.debug = true;
+
     world.cellSize = vec2.fromValues(32 * CELL_SCALE, 32 * CELL_SCALE);
     world.useBatchRenderer = true;
-    physics.setGravity(vec2.fromValues(0, -11));
+    physics.setGravity(vec2.fromValues(0, 0));
   }
 
   static loadMapEditor() {
@@ -214,12 +237,14 @@ export default abstract class Game {
 
       if (t.material.solid) {
         scene.physics.addBody(body);
-      } else {
-        scene.physics.addDynamicsObj(body);
       }
     }
 
     map.tiles = mapTiles;
+
+    if (map instanceof Maze) {
+      map.placePowerups(scene);
+    }
   }
 
   static unload() {
