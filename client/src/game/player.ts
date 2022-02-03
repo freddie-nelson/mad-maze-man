@@ -19,15 +19,22 @@ import Manifold from "blaze-2d/lib/src/physics/manifold";
 import CollisionObject from "blaze-2d/lib/src/physics/collisionObject";
 import Powerup from "./powerup";
 import Bullet from "./bullet";
+import Maze from "./maze";
+import Enemy from "./enemy";
 
 export default class Player {
   entity: Entity;
-  moveForce = 200;
-  maxVelocity = 5;
+
+  mf = 200;
+  mv = 5;
+  moveForce = this.mf;
+  maxVelocity = this.mv;
 
   speedForce = 300;
   speedMaxVel = 7;
-  speedInterval: number | undefined;
+  speedDuration = 10;
+  speedTimer = 0;
+  speedBar = <HTMLElement>document.getElementById("speedBar");
 
   dashForce = 5000;
   dashTimeout = 600;
@@ -38,6 +45,7 @@ export default class Player {
   minHealth = 0;
   maxHealth = 100;
   health = this.maxHealth;
+  healthBar = <HTMLElement>document.getElementById("healthBar");
 
   isShooting = false;
   timeOfShot = 0;
@@ -55,7 +63,13 @@ export default class Player {
     const sprite = new Rect(this.size, this.size);
     sprite.texture = TEXTURES.player;
 
-    this.entity = new Entity(vec2.create(), new RectCollider(this.size, this.size), [sprite], this.mass);
+    this.entity = new Entity(
+      vec2.create(),
+      new RectCollider(this.size, this.size),
+      [sprite],
+      this.mass,
+      "player"
+    );
     this.entity.setZIndex(1);
     this.entity.setInertia(0);
     this.entity.addEventListener("update", this.entityListener);
@@ -85,24 +99,18 @@ export default class Player {
     if (powerup.name === "health") {
       this.health = Math.min(this.maxHealth, this.health + this.maxHealth / 5);
     } else if (powerup.name === "speed") {
-      const max = this.maxVelocity;
-      const force = this.moveForce;
-
       this.maxVelocity = this.speedMaxVel;
       this.moveForce = this.speedForce;
 
-      if (this.speedInterval !== undefined) clearInterval(this.speedInterval);
-
-      this.speedInterval = setInterval(() => {
-        this.maxVelocity = max;
-        this.moveForce = force;
-        this.speedInterval = undefined;
-      }, 10000);
+      this.speedTimer = 0;
+      this.speedBar.parentElement?.classList.remove("hidden");
     }
 
     this.world.removeEntity(powerup);
     this.physics.removeBody(powerup);
   };
+
+  private oldHealth = -1;
 
   private entityListener = (delta: number) => {
     this.world.getCamera().setPosition(this.entity.getPosition());
@@ -110,7 +118,71 @@ export default class Player {
     this.movement();
     this.capVelocity();
     this.shoot(delta);
+
+    if (this.health !== this.oldHealth) {
+      this.healthBar.style.width = `${(this.health / this.maxHealth) * 100}%`;
+    }
+
+    this.oldHealth = this.health;
+
+    if (this.maxVelocity === this.speedMaxVel) {
+      this.speedTimer += delta;
+      this.speedBar.style.width = `${100 - (this.speedTimer / this.speedDuration) * 100}%`;
+    } else {
+      this.speedBar.parentElement?.classList.add("hidden");
+    }
+
+    if (this.speedTimer >= this.speedDuration) {
+      this.maxVelocity = this.mv;
+      this.moveForce = this.mf;
+      this.speedBar.parentElement?.classList.add("hidden");
+    }
+
+    this.spawnEnemies();
+    this.checkWin();
+    this.checkDead();
   };
+
+  private checkWin() {
+    const maze = <Maze>Game.map;
+    if (!(maze instanceof Maze)) return;
+
+    const dist = vec2.dist(maze.goal, this.entity.getPosition());
+    if (dist <= 0.75) {
+      Game.unload();
+      const el = document.getElementById("win");
+      if (el) {
+        el.classList.remove("hidden");
+      }
+    }
+  }
+
+  private checkDead() {
+    if (this.health <= this.minHealth) {
+      Game.unload();
+      const el = document.getElementById("gameOver");
+      if (el) {
+        el.classList.remove("hidden");
+      }
+    }
+  }
+
+  private spawnEnemies() {
+    const chanceToSpawn = 0.0001;
+    const radiusMin = 5 ** 2;
+    const radiusMax = 10 ** 2;
+
+    const maze = <Maze>Game.map;
+    if (!(maze instanceof Maze)) return;
+
+    maze.floorTiles.forEach((t) => {
+      const sqrDist = vec2.sqrDist(t.getPosition(), this.entity.getPosition());
+
+      if (sqrDist >= radiusMin && sqrDist <= radiusMax && Math.random() <= chanceToSpawn) {
+        new Enemy(this.world, this.physics, t.getPosition(), this);
+      }
+    });
+  }
 
   private movement() {
     const keys = Blaze.getCanvas().keys;

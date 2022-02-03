@@ -6,7 +6,7 @@
       class="
         logo
         w-256px
-        -mt-[calc(24px*var(--img-scale))]
+        -mt-[calc(32px*var(--img-scale))]
         mb-16
         select-none
         pointer-events-none
@@ -19,15 +19,6 @@
         hoverImage="/assets/buttons/singleplayer-btn-hover.png"
         class="w-128px h-32px transform hover:scale-110"
         @click="$router.push({ name: 'Singleplayer' })"
-      />
-    </div>
-
-    <div class="flex mb-10">
-      <s-image-button
-        image="/assets/buttons/leaderboard-btn.png"
-        hoverImage="/assets/buttons/leaderboard-btn-hover.png"
-        class="w-128px h-32px transform hover:scale-110"
-        @click="$router.push({ name: 'Leaderboard' })"
       />
     </div>
   </main>

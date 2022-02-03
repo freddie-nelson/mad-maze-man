@@ -28,7 +28,10 @@ export default class Maze extends GameMap {
   cells: Cell[][] = [];
   path: Cell[] = [];
 
-  constructor(width = 6, height = 3) {
+  floorTiles: Tile[] = [];
+  goal = vec2.create();
+
+  constructor(width = 5, height = 3) {
     super("Maze", "Dev");
 
     this.width = width;
@@ -39,22 +42,23 @@ export default class Maze extends GameMap {
     this.generateMaze();
     this.solveMaze();
     this.cellsToTiles();
+
+    this.floorTiles = this.tiles.filter((t) => t.type === "stone");
   }
 
   placePowerups(scene: Scene) {
     const healthNum = 5;
     const speedNum = 5;
-    const floorTiles = this.tiles.filter((t) => t.type === "stone");
 
     for (let i = 0; i < speedNum; i++) {
-      const pos = floorTiles[Math.floor(Math.random() * floorTiles.length)].getPosition();
+      const pos = this.floorTiles[Math.floor(Math.random() * this.floorTiles.length)].getPosition();
       const powerup = new Powerup("speed", pos, TEXTURES.speed);
       scene.world.addEntity(powerup);
       scene.physics.addBody(powerup);
     }
 
     for (let i = 0; i < healthNum; i++) {
-      const pos = floorTiles[Math.floor(Math.random() * floorTiles.length)].getPosition();
+      const pos = this.floorTiles[Math.floor(Math.random() * this.floorTiles.length)].getPosition();
       const powerup = new Powerup("health", pos, TEXTURES.health);
       scene.world.addEntity(powerup);
       scene.physics.addBody(powerup);
@@ -87,7 +91,7 @@ export default class Maze extends GameMap {
       rot = Math.atan2(next.y - c.y, next.x - c.x) - Math.PI / 2;
     }
 
-    const arrow = new Tile(pos, 0, "arrow");
+    const arrow = new Tile(pos, 0, next ? "arrow" : ((this.goal = pos), "goal"));
     arrow.rotate(rot);
     this.addTile(arrow);
   }

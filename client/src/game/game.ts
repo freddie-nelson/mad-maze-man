@@ -41,6 +41,9 @@ export default abstract class Game {
   static canvas: BlazeElement<HTMLCanvasElement>;
   static cleanup: () => void;
 
+  static map: GameMap | undefined;
+  static score = 0;
+
   static controls = {
     moveRight: "KeyD",
     moveLeft: "KeyA",
@@ -66,8 +69,8 @@ export default abstract class Game {
     globalThis.CELL_SCALE = 5;
     // globalThis.CELL_SCALE = 0.5;
 
-    globalThis.TILE_TYPES = ["wall", "stone", "arrow"];
-    globalThis.TILE_IMAGES = ["wall", "stone", "arrow"];
+    globalThis.TILE_TYPES = ["wall", "stone", "arrow", "goal"];
+    globalThis.TILE_IMAGES = ["wall", "stone", "arrow", "goal"];
 
     globalThis.TILE_MATERIALS = {
       wall: {
@@ -83,6 +86,7 @@ export default abstract class Game {
       wall: "wall",
       stone: "floor",
       arrow: "floor",
+      goal: "floor",
     };
 
     globalThis.TILE_SIZE = 1;
@@ -104,6 +108,7 @@ export default abstract class Game {
     // load textures
     (async () => {
       const tileTexs = [
+        new Texture(new Color("#929292")),
         new Texture(new Color("#929292")),
         new Texture(new Color("#929292")),
         new Texture(new Color("#929292")),
@@ -162,6 +167,7 @@ export default abstract class Game {
   static loadMap(map: GameMap, addPlayer = true) {
     if (!this.canvas) return;
     this.unload();
+    this.score = 0;
 
     const scene = new Scene();
     Blaze.setScene(scene);
@@ -241,6 +247,7 @@ export default abstract class Game {
     }
 
     map.tiles = mapTiles;
+    this.map = map;
 
     if (map instanceof Maze) {
       map.placePowerups(scene);
@@ -250,6 +257,7 @@ export default abstract class Game {
   static unload() {
     if (this.cleanup) this.cleanup();
 
+    this.map = undefined;
     Blaze.setScene(new Scene());
   }
 
@@ -263,6 +271,15 @@ export default abstract class Game {
     vec2.rotate(pos, pos, vec2.create(), rot);
 
     return pos;
+  }
+
+  static addScore(s: number) {
+    this.score += s;
+
+    const el = document.getElementById("score");
+    if (!el) return;
+
+    el.textContent = String(this.score);
   }
 
   static hide() {
